@@ -1,0 +1,22 @@
+{
+    "compilerOptions": {
+        "module": "esnext",
+        "moduleResolution": "node",
+        "noImplicitAny": true,
+        "removeComments": true,
+        "sourceMap": true,
+        "preserveConstEnums": false,
+        "outDir": "out",
+        "esModuleInterop": true,
+        "alwaysStrict": true,
+        "strict": true,
+        "lib": ["ESNext", "DOM"],
+        "downlevelIteration": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUnusedLocals": false,
+        "noUnusedParameters": true,
+        "target": "esnext",
+        "experimentalDecorators": true
+    },
+    "include": ["src/**/*", "./api.ts", "scrape/*.ts", "index.ts"],
+}
