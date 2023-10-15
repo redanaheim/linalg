@@ -1,8 +1,8 @@
-class Vector<Length extends number | undefined> {
+class Vector {
     private getter: (index: number) => number;
-    length: Length | undefined;
+    length: number | undefined;
 
-    constructor (getter: (index: number) => number, length: Length | undefined) {
+    constructor (getter: (index: number) => number, length: number | undefined) {
         this.getter = getter;
         this.length = length;
     }
@@ -11,28 +11,114 @@ class Vector<Length extends number | undefined> {
         return this.getter(idx)
     }
 
-    static from_array<Length extends number>(arr: number[], length: Length | undefined) {
+    static from_array(arr: number[], length: number | undefined) {
         const getter = (idx: number) => {
             if (idx >= arr.length) return 0;
             return arr[idx];
         }
-        return new Vector<Length>(getter, length)
+        return new Vector(getter, length)
+    }
+    
+    apply_row_op (op: RowOp): Vector {
+        switch (op.type) {
+            case "swap": {
+                return new Vector(i => {
+                    if (i === op.row_one) return this.get(op.row_two)
+                    else if (i === op.row_two) return this.get(op.row_one)
+                    else return this.get(i)
+                }, this.length)
+            }
+            case "set": {
+                return new Vector(i => {
+                    if (i === op.row_target) return this.get(op.row_source) * op.multiple
+                    else return this.get(i)
+                }, this.length)
+            }
+            case "add": {
+                return new Vector(i => {
+                    if (i === op.row_target) return this.get(op.row_source) * op.multiple + this.get(op.row_target)
+                    else return this.get(i)
+                }, this.length)
+            }
+        }
     }
 
-    join<Length extends number | undefined>(other: Vector<Length>) {
+    apply_row_ops (...ops: RowOp[]): Vector {
+        let res: Vector = this;
+        for (const op of ops) {
+            res = res.apply_row_op(op);
+        }
+        return res;
+    }
+
+    join(other: Vector): Vector {
         const getter = (idx: number) => {
             if (this.length === undefined || idx < this.length) return this.get(idx)
             else return other.get(idx)
         }
+        return new Vector(getter, (this.length === undefined || other.length === undefined) ? undefined : length + other.length)
     }
+
+    elw_op (fn: (x: number) => number): Vector {
+        return new Vector(idx => fn(this.get(idx)), this.length)
+    }
+
+    elw_op_other (other: Vector, fn: (x: number, y: number) => number): Vector {
+        return new Vector(idx => fn(this.get(idx), other.get(idx)), this.length)
+    }
+
+    cross (other: Vector) {
+        return this.elw_op_other(other, (x, y) => (x * y))
+    }
+
+    dot(other: Vector, max_length = 1) {
+        let total = 0;
+        for (let i = 0; i < (this.length ?? max_length); i++) {
+            total += this.get(i) * other.get(i)
+        }
+        return total;
+    }
+    
+    lin_comb_coefficients (column_size: number = this.length ?? 5, ...vectors: Vector[]): Vector | undefined {
+        const cv_matrix = Matrix.from_column_vectors(column_size, ...vectors);
+        const reduced = cv_matrix.rref();
+        const right_column = this.apply_row_ops(...reduced.operations);
+
+        for (let c = 0; c < reduced.result.columns; c++) {
+            if (reduced.pivots.includes(c) === false) return undefined;
+        }
+
+        return right_column;
+    }
+
+    print_item (idx: number, precision: number = 3): string {
+        return (+parseFloat((this.get(idx).toFixed(precision)))).toString()
+    }
+
+    toString(max_length: number = 5, precision: number = 3): string {
+        let buffer = [];
+        for (let i = 0; (i < (this.length ?? 0)) && (i < max_length); i++) {
+            buffer.push(this.print_item(i, precision));
+        }
+        return `[${buffer.join(", ")}]`
+    }
+
+    toColumn(spacing=1, max_length: number = 5, precision: number = 3): string {
+        let buffer = []
+        for (let i = 0; (i < (this.length ?? 0)) && (i < max_length); i++) {
+            buffer.push(this.print_item(i, precision));
+        }
+        return buffer.join(`\n`.repeat(spacing))
+    }
+    
 }
 
-class Matrix<Rows extends number, Columns extends number> {
+class Matrix {
     private getter: (row: number, column: number) => number;
-    rows: Rows;
-    columns: Columns;
+    rows: number;
+    columns: number;
 
-    constructor (getter: (row: number, column: number) => number, rows: Rows, columns: Columns) {
+    constructor (getter: (row: number, column: number) => number, rows: number, columns: number) {
         this.getter = getter;
         this.rows = rows;
         this.columns = columns;
@@ -40,6 +126,14 @@ class Matrix<Rows extends number, Columns extends number> {
 
     get (row: number, col: number) {
         return this.getter(row, col);
+    }
+
+    get_row (row: number) {
+        return new Vector(i => this.get(row, i), this.columns);
+    }
+
+    get_column (column: number) {
+        return new Vector(i => this.get(i, column), this.rows);
     }
 
     static from_2d_array(arr: number[][]) {
@@ -55,7 +149,7 @@ class Matrix<Rows extends number, Columns extends number> {
         return new Matrix(getter, arr.length, arr[0].length)
     }
 
-    static from_column_vectors<Length extends number>(column_length: Length, ...vectors: Vector<Length>[]) {
+    static from_column_vectors(column_length: number, ...vectors: Vector[]) {
         const getter = (row: number, col: number) => {
             if (col >= vectors.length) return 0;
             else {
@@ -66,7 +160,7 @@ class Matrix<Rows extends number, Columns extends number> {
         return new Matrix(getter, column_length, vectors.length)
     }
 
-    static from_row_vectors<Length extends number>(row_length: Length, ...vectors: Vector<Length>[]) {
+    static from_row_vectors(row_length: number, ...vectors: Vector[]) {
         const getter = (row: number, col: number) => {
             if (row >= vectors.length) return 0;
             else {
@@ -75,6 +169,14 @@ class Matrix<Rows extends number, Columns extends number> {
             }
         }
         return new Matrix(getter, vectors.length, row_length)
+    }
+
+    static id(rows: number, columns: number): Matrix {
+        const getter = (row: number, col: number) => {
+            if (row === col) return 1;
+            else return 0;
+        }
+        return new Matrix(getter, rows, columns)
     }
 
     to_2d_array (): number[][] {
@@ -89,12 +191,240 @@ class Matrix<Rows extends number, Columns extends number> {
         return rows;
     }
 
-    transposed (): Matrix<Columns, Rows> {
+    transposed (): Matrix {
         return new Matrix((i, j) => this.get(j, i), this.columns, this.rows)
     }
 
-    right_multiply<OtherColumns extends number>(other: Matrix<Columns, OtherColumns>): Matrix<Rows, OtherColumns> {
+    right_multiply(other: Matrix): Matrix {
+        const getter = (row: number, col: number): number => {
+           return this.get_row(row).dot(other.get_column(col)); 
+        }
+        return new Matrix(getter, this.rows, other.columns)
+    }
 
+    left_multiply(other: Matrix): Matrix {
+        return other.right_multiply(this);
+    }
+
+    adjoin_down(other: Matrix): Matrix {
+        const getter = (row: number, col: number): number => {
+            if (row >= this.rows) return other.get(row - this.rows, col);
+            else return this.get(row, col);
+        }
+        return new Matrix(getter, this.rows + other.rows, this.columns);
+    }
+
+    adjoin_right(other: Matrix): Matrix {
+        const getter = (row: number, col: number): number => {
+            if (col >= this.columns) return other.get(row, col - this.columns)
+            else return this.get(row, col);
+        }
+        return new Matrix(getter, this.rows, this.columns + other.columns);
+    }
+
+    adjoin_up(other: Matrix): Matrix {
+        return other.adjoin_down(this);
+    }
+
+    adjoin_left(other: Matrix): Matrix {
+        return other.adjoin_right(this);
+    }
+
+    slice(end_row: number, end_column: number, start_row=0, start_column=0): Matrix {
+        const getter = (row: number, col: number): number => {
+            if (row >= (end_row - start_row)) return 0;
+            if (col >= (end_column - start_column)) return 0;
+            return this.get(row - start_row, col - start_column);
+        }
+        return new Matrix(getter, end_row - start_row, end_column - start_column);
+    }
+
+    elw_op (fn: (a: number) => number): Matrix {
+        return new Matrix((i, j) => fn(this.get(i, j)), this.rows, this.columns);
+    }
+
+    elw_op_other(other: Matrix, fn: (a: number, b: number) => number): Matrix {
+        return new Matrix((i, j) => fn(this.get(i, j), other.get(i, j)), this.rows, this.columns);
+    }
+
+    add (other: Matrix): Matrix {
+        return this.elw_op_other(other, (a, b) => (a + b))
+    }
+
+    add_scalar (scalar: number): Matrix {
+        return this.elw_op(x => (x + scalar));
+    }
+
+    multiply_scalar (scalar: number): Matrix {
+        return this.elw_op(x => (x * scalar))
+    }
+
+    eq (other: Matrix): boolean {
+        for (let r = 0; r < this.rows; r++) {
+            for (let c = 0; c < this.columns; c++) {
+                if (this.get(r, c) !== other.get(r, c)) return false;
+            }
+        }
+        return true;
+    }
+
+    apply_row_op (op: RowOp): Matrix {
+        switch (op.type) {
+            case "swap": {
+                return new Matrix((i, j) => {
+                    if (i === op.row_one) return this.get(op.row_two, j)
+                    else if (i === op.row_two) return this.get(op.row_one, j)
+                    else return this.get(i, j)
+                }, this.rows, this.columns)
+            }
+            case "set": {
+                return new Matrix((i, j) => {
+                    if (i === op.row_target) return this.get(op.row_source, j) * op.multiple
+                    else return this.get(i, j)
+                }, this.rows, this.columns)
+            }
+            case "add": {
+                return new Matrix((i, j) => {
+                    if (i === op.row_target) return this.get(op.row_source, j) * op.multiple + this.get(op.row_target, j)
+                    else return this.get(i, j)
+                }, this.rows, this.columns)
+            }
+        }
+    }
+
+    apply_row_ops (...ops: RowOp[]): Matrix {
+        let res: Matrix = this;
+        ops.forEach(o => res = res.apply_row_op(o));
+        return res;
+    }
+
+    rref (): { result: Matrix, operations: RowOp[], pivots: number[] } {
+        let operations = [] as RowOp[];
+        let pivots = [];
+
+        let current_mat: Matrix = this;
+
+        const do_op = (op: RowOp) => {
+            current_mat = current_mat.apply_row_op(op)
+            operations.push(op);
+        }
+
+        let last_pivot_spot = 0;
+
+        for (let c = 0; c < Math.min(this.columns, this.rows); c++) {
+            let min_dist = Number.POSITIVE_INFINITY;
+            let row_index = -1;
+
+            // Find the closest value multiplicatively to 1 so we can move it to the top row
+            for (let r = last_pivot_spot; r < this.rows; r++) {
+                let item = this.get(r, c);
+                if (item === 0) {
+                    continue;
+                }
+                let dist = Math.abs(Math.log(Math.abs(item)))
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    row_index = r;
+                }
+            }
+
+            let current_row_pivot = last_pivot_spot;
+            
+            // If the row is all zeros or already starts with a 1: do nothing
+            if (row_index === -1) {
+                continue;
+            }
+            // Otherwise swap the closest value to 1 to the diagonal spot
+            else if (row_index !== current_row_pivot) {
+                do_op({
+                    "type": "swap",
+                    "row_one": current_row_pivot,
+                    "row_two": row_index
+                });
+            }
+            last_pivot_spot++;
+
+            // Divide the row corresponding to the current column to have a 1
+            do_op({
+                "type": "set",
+                "row_target": current_row_pivot,
+                "row_source": current_row_pivot,
+                "multiple": 1 / current_mat.get(current_row_pivot, c)
+            })
+
+            pivots.push(c);
+
+            for (let r = 0; r < this.rows; r++) {
+                if (r === current_row_pivot) continue;
+                let pivot = current_mat.get(current_row_pivot, c);
+                if (pivot !== 1) continue;
+                let value = current_mat.get(r, c);
+                if (value === 0) {
+                    continue;
+                }
+                do_op({
+                    "type": "add",
+                    "row_target": r,
+                    "row_source": current_row_pivot,
+                    "multiple": -1 * value
+                })
+            }
+        }
+
+        return {
+            result: current_mat,
+            operations,
+            pivots
+        }
+    }
+
+    inv (): Matrix | undefined {
+        if (this.rows !== this.columns) return undefined;
+        let res = this.rref();
+        if (res.result.eq(Matrix.id(this.rows, this.columns))) {
+            return Matrix.id(this.rows, this.columns).apply_row_ops(...res.operations);
+        }
+        else return undefined;
+    }
+    
+    img_basis(): Vector[] {
+        let res = this.rref();
+        return res.pivots.map(i => this.get_column(i));
+    }
+
+    get_pivot_row (col: number): number {
+        for (let r = 0; r < this.rows; r++) {
+            if (this.get(r, col) === 1) return r;
+        }
+        return -1;
+    }
+
+    kl_basis(): Vector[] {
+        let res = this.rref();
+        console.log(res.result.print())
+        console.log(res)
+        let res_basis = [];
+        
+        for (let c = 0; c < this.columns; c++) {
+            if (res.pivots.includes(c)) continue;
+
+            let basis = [];
+            for (let i = 0; i < this.columns; i++) {
+                if (res.pivots.includes(i)) {
+                    const pivot_row = res.result.get_pivot_row(i);
+                    const item = res.result.get(pivot_row, c);
+                    basis.push(-1 * item);
+                }
+                else if (i === c) {
+                    basis.push(1);
+                }
+                else {
+                    basis.push(0);
+                }
+            }
+            res_basis.push(Vector.from_array(basis, basis.length));
+        }
+        return res_basis;
     }
 
     print_item (r: number, c: number, precision: number = 3): string {
@@ -152,114 +482,14 @@ type AddRowOp = {
 
 type RowOp = SwapRowOp | SetRowOp | AddRowOp
 
-const apply_row_op = <R extends number, C extends number>(op: RowOp, mat: Matrix<R,C>): Matrix<R,C> => {
-    switch (op.type) {
-        case "swap": {
-            return new Matrix((i, j) => {
-                if (i === op.row_one) return mat.get(op.row_two, j)
-                else if (i === op.row_two) return mat.get(op.row_one, j)
-                else return mat.get(i, j)
-            }, mat.rows, mat.columns)
-        }
-        case "set": {
-            return new Matrix((i, j) => {
-                if (i === op.row_target) return mat.get(op.row_source, j) * op.multiple
-                else return mat.get(i, j)
-            }, mat.rows, mat.columns)
-        }
-        case "add": {
-            return new Matrix((i, j) => {
-                if (i === op.row_target) return mat.get(op.row_source, j) * op.multiple + mat.get(op.row_target, j)
-                else return mat.get(i, j)
-            }, mat.rows, mat.columns)
-        }
-    }
-}
 
-// Based on gaussian elimination
-const rref = <R extends number, C extends number>(mat: Matrix<R, C>): { result: Matrix<R, C>, operations: RowOp[] } => {
-    let operations = [] as RowOp[];
+let cv_1 = Vector.from_array([1, 0, -1], 3);
+let cv_2 = Vector.from_array([1, 1, 0], 3);
+let cv_3 = Vector.from_array([0, -1, 1], 3);
+// let cv_3 = Vector.from_array([-2, -2, 3, -2], 4);
+// let cv_4 = Vector.from_array([3, 0, 2, 2], 4);
 
-    let current_mat = mat;
+let test_vector = Vector.from_array([9, 5, 3], 3)
 
-    const do_op = (op: RowOp) => {
-        current_mat = apply_row_op(op, current_mat)
-        operations.push(op);
-        console.log(op);
-        console.log(current_mat.print())
-    }
-
-    let last_pivot_spot = 0;
-
-    for (let c = 0; c < Math.min(mat.columns, mat.rows); c++) {
-        let min_dist = Number.POSITIVE_INFINITY;
-        let row_index = -1;
-
-        // Find the closest value multiplicatively to 1 so we can move it to the top row
-        for (let r = last_pivot_spot; r < mat.rows; r++) {
-       	    let item = mat.get(r, c);
-            if (item === 0) {
-                continue;
-            }
-            let dist = Math.abs(Math.log(Math.abs(item)))
-            if (dist < min_dist) {
-                min_dist = dist;
-                row_index = r;
-            }
-        }
-
-        let current_row_pivot = last_pivot_spot;
-        
-        // If the row is all zeros or already starts with a 1: do nothing
-        if (row_index === -1) {
-            continue;
-        }
-        // Otherwise swap the closest value to 1 to the diagonal spot
-        else if (row_index !== current_row_pivot) {
-            do_op({
-                "type": "swap",
-                "row_one": current_row_pivot,
-                "row_two": row_index
-            });
-        }
-        last_pivot_spot++;
-
-        // Divide the row corresponding to the current column to have a 1
-        do_op({
-            "type": "set",
-            "row_target": current_row_pivot,
-            "row_source": current_row_pivot,
-            "multiple": 1 / current_mat.get(current_row_pivot, c)
-        })
-
-        for (let r = 0; r < mat.rows; r++) {
-            if (r === c) continue;
-            let pivot = current_mat.get(current_row_pivot, c);
-            if (pivot !== 1) continue;
-            let value = current_mat.get(r, c);
-            if (value === 0) {
-                continue;
-            }
-            do_op({
-                "type": "add",
-                "row_target": r,
-                "row_source": c,
-                "multiple": -1 * value
-            })
-        }
-    }
-
-    return {
-        result: current_mat,
-        operations
-    }
-}
-
-let cv_1 = Vector.from_array([2, -2, -1, -3], 4);
-let cv_2 = Vector.from_array([-3, 2, 3, -2], 4);
-let cv_3 = Vector.from_array([-2, -2, 3, -2], 4);
-let cv_4 = Vector.from_array([3, 0, 2, 2], 4);
-
-let mat = Matrix.from_column_vectors(4, cv_1, cv_2, cv_3, cv_4) as Matrix<4, 4>;
-
-rref(mat)
+let a = test_vector.lin_comb_coefficients(3, cv_1, cv_2, cv_3);
+console.log((a as Vector).toString())
