@@ -79,7 +79,7 @@ class Vector {
         return total;
     }
     
-    lin_comb_coefficients (column_size: number = this.length ?? 5, ...vectors: Vector[]): Vector | undefined {
+    with_basis (column_size: number = this.length ?? 5, ...vectors: Vector[]): Vector | undefined {
         const cv_matrix = Matrix.from_column_vectors(column_size, ...vectors);
         const reduced = cv_matrix.rref();
         const right_column = this.apply_row_ops(...reduced.operations);
@@ -89,6 +89,16 @@ class Vector {
         }
 
         return right_column;
+    }
+
+    change_basis(column_size: number = this.length ?? 5, basis_source: Vector[], basis_target: Vector[]): Vector | undefined {
+        let res = Vector.from_array((new Array(column_size)).fill(0), column_size);
+        const source_in_target_coords = basis_source.map(x => x.with_basis(column_size, ...basis_target)) as Vector[];
+        if (source_in_target_coords.some(x => x === undefined)) return undefined;
+        for (let i = 0; i < source_in_target_coords.length; i++) {
+            res = res.elw_op_other(source_in_target_coords[i], (x, y) => (x + this.get(i) * y))
+        }
+        return res;
     }
 
     print_item (idx: number, precision: number = 3): string {
@@ -109,6 +119,18 @@ class Vector {
             buffer.push(this.print_item(i, precision));
         }
         return buffer.join(`\n`.repeat(spacing))
+    }
+
+    static std_basis_vector(index: number, dim: number): Vector {
+        return new Vector(i => (i === index) ? 1 : 0, dim);
+    }
+
+    static std_basis(dim: number): Vector[] {
+        let res = [];
+        for (let i = 0; i < dim; i++) {
+            res.push(Vector.std_basis_vector(i, dim));
+        }
+        return res;
     }
     
 }
@@ -204,6 +226,13 @@ class Matrix {
 
     left_multiply(other: Matrix): Matrix {
         return other.right_multiply(this);
+    }
+
+    right_multiply_vector(other: Vector): Vector {
+        const getter = (idx: number): number => {
+            return this.get_row(idx).dot(other);
+        }
+        return new Vector(getter, this.rows)
     }
 
     adjoin_down(other: Matrix): Matrix {
@@ -427,6 +456,22 @@ class Matrix {
         return res_basis;
     }
 
+    with_basis(...basis: Vector[]) {
+        return this.change_basis(Vector.std_basis(basis.length), basis);
+    }
+
+    change_basis(basis_source: Vector[], basis_target: Vector[]) {
+        const getter = (row: number, col: number): number => {
+            let basis_changed_basis = basis_target[col].with_basis(this.rows, ...basis_source)
+            if (basis_changed_basis === undefined) return 0;
+            let transformed = this.right_multiply_vector(basis_changed_basis);
+            let back_transformed = transformed.change_basis(this.rows, basis_source, basis_target);
+            if (back_transformed === undefined) return 0;
+            return back_transformed.get(row);
+        }
+        return new Matrix(getter, this.rows, this.columns);
+    }
+
     print_item (r: number, c: number, precision: number = 3): string {
         return (+parseFloat((this.get(r, c)).toFixed(precision))).toString()
     }
@@ -481,15 +526,3 @@ type AddRowOp = {
 }
 
 type RowOp = SwapRowOp | SetRowOp | AddRowOp
-
-
-let cv_1 = Vector.from_array([1, 0, -1], 3);
-let cv_2 = Vector.from_array([1, 1, 0], 3);
-let cv_3 = Vector.from_array([0, -1, 1], 3);
-// let cv_3 = Vector.from_array([-2, -2, 3, -2], 4);
-// let cv_4 = Vector.from_array([3, 0, 2, 2], 4);
-
-let test_vector = Vector.from_array([9, 5, 3], 3)
-
-let a = test_vector.lin_comb_coefficients(3, cv_1, cv_2, cv_3);
-console.log((a as Vector).toString())
