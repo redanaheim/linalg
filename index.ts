@@ -476,6 +476,22 @@ export class Matrix {
         return new Matrix(getter, this.rows, this.columns);
     }
 
+    /**
+     * Returns the change of base matrix S_(b1 -> b2).
+    */
+    static cbm(basis_source: Vector[], basis_target: Vector[]): Matrix {
+        const l_source = basis_source.length > 0 ? (basis_source[0].length ?? 0) : 0;
+        const l_target = basis_target.length > 0 ? (basis_target[0].length ?? 0) : 0;
+        const getter = (row: number, col: number): number => {
+            let b1_in_b2 = basis_source[col].with_basis(l_source, ...basis_target);
+            if (b1_in_b2 === undefined) {
+                return 0;
+            }
+            return b1_in_b2.get(row);
+        }
+        return new Matrix(getter, l_target, l_source)
+    }
+
     print_item (r: number, c: number, precision: number = 3): string {
         return (+parseFloat((this.get(r, c)).toFixed(precision))).toString()
     }
@@ -504,6 +520,10 @@ export class Matrix {
         }
         
         return buffer.trim()
+    }
+
+    toString() {
+        return this.print()
     }
 }
 
