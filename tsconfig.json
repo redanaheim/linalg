@@ -18,5 +18,5 @@
         "target": "esnext",
         "experimentalDecorators": true
     },
-    "include": ["src/**/*", "./api.ts", "scrape/*.ts", "index.ts"],
+    "include": ["src/**/*", "./api.ts", "scrape/*.ts", "index.ts", "testing.ts"],
 }

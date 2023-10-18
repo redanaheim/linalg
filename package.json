@@ -4,6 +4,6 @@
     "@types/node": "^20.6.2"
   },
   "scripts": {
-    "start": "tsc && node out/api.js"
+    "start": "tsc && node out/testing.js"
   }
 }

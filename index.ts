@@ -1,4 +1,4 @@
-class Vector {
+export class Vector {
     private getter: (index: number) => number;
     length: number | undefined;
 
@@ -11,12 +11,12 @@ class Vector {
         return this.getter(idx)
     }
 
-    static from_array(arr: number[], length: number | undefined) {
+    static from_array(arr: number[]) {
         const getter = (idx: number) => {
             if (idx >= arr.length) return 0;
             return arr[idx];
         }
-        return new Vector(getter, length)
+        return new Vector(getter, arr.length)
     }
     
     apply_row_op (op: RowOp): Vector {
@@ -92,7 +92,7 @@ class Vector {
     }
 
     change_basis(column_size: number = this.length ?? 5, basis_source: Vector[], basis_target: Vector[]): Vector | undefined {
-        let res = Vector.from_array((new Array(column_size)).fill(0), column_size);
+        let res = Vector.from_array((new Array(column_size)).fill(0));
         const source_in_target_coords = basis_source.map(x => x.with_basis(column_size, ...basis_target)) as Vector[];
         if (source_in_target_coords.some(x => x === undefined)) return undefined;
         for (let i = 0; i < source_in_target_coords.length; i++) {
@@ -135,7 +135,7 @@ class Vector {
     
 }
 
-class Matrix {
+export class Matrix {
     private getter: (row: number, column: number) => number;
     rows: number;
     columns: number;
@@ -451,7 +451,7 @@ class Matrix {
                     basis.push(0);
                 }
             }
-            res_basis.push(Vector.from_array(basis, basis.length));
+            res_basis.push(Vector.from_array(basis));
         }
         return res_basis;
     }
@@ -505,24 +505,24 @@ class Matrix {
 
 
 
-type SwapRowOp = {
+export type SwapRowOp = {
     type: "swap",
     row_one: number,
     row_two: number
 }
 
-type SetRowOp = {
+export type SetRowOp = {
     type: "set",
     row_target: number,
     row_source: number,
     multiple: number
 }
 
-type AddRowOp = {
+export type AddRowOp = {
     type: "add",
     row_target: number,
     row_source: number,
     multiple: number
 }
 
-type RowOp = SwapRowOp | SetRowOp | AddRowOp
+export type RowOp = SwapRowOp | SetRowOp | AddRowOp
