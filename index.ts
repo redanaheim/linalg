@@ -121,6 +121,12 @@ export class Vector {
         return buffer.join(`\n`.repeat(spacing))
     }
 
+    static from_matrix(mat: Matrix): Vector {
+        return new Vector(i => {
+            return mat.get(i % mat.rows, i - (i % mat.rows))
+        }, mat.rows * mat.columns)
+    }
+
     static std_basis_vector(index: number, dim: number): Vector {
         return new Vector(i => (i === index) ? 1 : 0, dim);
     }
@@ -492,6 +498,17 @@ export class Matrix {
         return new Matrix(getter, l_target, l_source)
     }
 
+    /**
+    * Strings a vector into a matrix with the first few elements of the vector going, in order, to the first row, then the next
+    * few to the second row, etc.
+    */
+    static from_vector (vector: Vector, rows: number, columns: number): Matrix {
+        const getter = (row: number, col: number) => {
+           return vector.get(row * columns + col);
+        }
+        return new Matrix(getter, rows, columns);
+    }
+
     print_item (r: number, c: number, precision: number = 3): string {
         return (+parseFloat((this.get(r, c)).toFixed(precision))).toString()
     }
@@ -525,6 +542,7 @@ export class Matrix {
     toString() {
         return this.print()
     }
+
 }
 
 
