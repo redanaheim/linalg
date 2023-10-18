@@ -158,6 +158,10 @@ export class Matrix {
         return new Vector(i => this.get(i, column), this.rows);
     }
 
+    /**
+     * The inner arrays specify rows.
+     * arr[i, j] = the element in row i column j
+    */
     static from_2d_array(arr: number[][]) {
         const getter = (row: number, col: number) => {
             if (row >= arr.length) return 0;
